@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../brand.dart';
 import '../state/app_state.dart';
 import '../widgets/common.dart';
 
@@ -38,10 +39,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 380),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Icon(Icons.water_drop, size: 48, color: t.colorScheme.primary),
-                const SizedBox(height: 12),
-                Text('Oasis Sales', textAlign: TextAlign.center, style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-                Text('Motoris & sales outlet', textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
+                const Center(child: OasisLogo(height: 110, padding: EdgeInsets.all(12))),
+                const SizedBox(height: 16),
+                Text('Oasis Sales', textAlign: TextAlign.center, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: t.colorScheme.primary)),
+                Text('Motoris & sales outlet', textAlign: TextAlign.center, style: t.textTheme.bodyMedium?.copyWith(color: OasisColors.teal, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 28),
                 TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
                 const SizedBox(height: 12),

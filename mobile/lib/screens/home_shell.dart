@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../brand.dart';
 import '../state/app_state.dart';
 import 'beranda_screen.dart';
 import 'rute_screen.dart';
@@ -26,6 +27,8 @@ class _HomeShellState extends State<HomeShell> {
     ];
     return Scaffold(
       appBar: AppBar(
+        leading: const Padding(padding: EdgeInsets.only(left: 12), child: Center(child: OasisLogo(height: 26, withTagline: false, padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3)))),
+        leadingWidth: 100,
         title: Text(['Beranda', 'Rute ${s.today?.ruteKode ?? ''}', 'Setoran'][_tab]),
         actions: [
           IconButton(onPressed: s.loading ? null : s.refresh, icon: const Icon(Icons.refresh), tooltip: 'Muat ulang'),
