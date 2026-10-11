@@ -17,7 +17,7 @@ Di setiap kunjungan sales memilih **Jual langsung** atau **Ambil order**. Backen
 
 ## Menjalankan
 
-Diuji dengan Flutter 3.47.7 (Dart 3.13). Jalankan backend Laravel dulu (`php artisan serve --host=0.0.0.0`).
+Diuji dengan Flutter 3.41.6 (Dart 3.11) dan 3.47.7 (Dart 3.13). Jalankan backend Laravel dulu (`php artisan serve --host=0.0.0.0`).
 
 ```bash
 flutter pub get

@@ -16,7 +16,7 @@ composer install && cp .env.example .env && php artisan key:generate
 touch database/database.sqlite && php artisan migrate --seed
 php artisan serve --host=0.0.0.0 --port=8000     # web: admin@oasis.test / password
 
-# Aplikasi (Flutter 3.47+)
+# Aplikasi (Flutter 3.41+)
 cd ../mobile
 flutter pub get
 flutter run --dart-define=API_URL=http://<ip-komputer>:8000/api   # sales: rudi@oasis.test / password
