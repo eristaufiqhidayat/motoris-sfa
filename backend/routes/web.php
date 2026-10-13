@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\GalonController;
+use App\Http\Controllers\Web\KunjunganController;
 use App\Http\Controllers\Web\MuatController;
 use App\Http\Controllers\Web\OpnameController;
 use App\Http\Controllers\Web\OrderController;
@@ -28,6 +29,10 @@ Route::middleware(['auth', 'backoffice'])->group(function () {
     Route::get('/order', [OrderController::class, 'index'])->name('order');
     Route::post('/order/{order}/setujui', [OrderController::class, 'approve'])->name('order.approve');
     Route::post('/order/{order}/tolak', [OrderController::class, 'reject'])->name('order.reject');
+
+    Route::get('/kunjungan', [KunjunganController::class, 'index'])->name('kunjungan');
+    Route::get('/kunjungan/{visit}/foto', [KunjunganController::class, 'foto'])->name('kunjungan.foto');
+    Route::post('/kunjungan/{visit}/periksa', [KunjunganController::class, 'periksa'])->name('kunjungan.periksa');
 
     Route::get('/opname', [OpnameController::class, 'index'])->name('opname');
     Route::post('/opname', [OpnameController::class, 'store'])->name('opname.store');

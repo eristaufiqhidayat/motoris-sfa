@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Kamera dipakai untuk foto toko saat check-in kunjungan.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Foto toko disimpan untuk bukti kunjungan.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Lokasi dipakai untuk check-in kunjungan outlet.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

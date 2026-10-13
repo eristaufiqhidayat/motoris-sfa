@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../api/api_client.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../util_format.dart';
@@ -34,7 +36,7 @@ class _KunjunganScreenState extends State<KunjunganScreen> {
   void initState() {
     super.initState();
     // Kunjungan yang sudah check-in tapi belum ditutup bisa dilanjutkan.
-    if (o.kunjungan?.open == true) _checkin();
+    if (o.kunjungan?.open == true) _lanjutkan();
   }
 
   Future<void> _run(Future<void> Function() f) async {
@@ -50,19 +52,38 @@ class _KunjunganScreenState extends State<KunjunganScreen> {
 
   Future<Position?> _posisi() async {
     try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return null;
-      return await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)));
+      return await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)));
     } catch (_) {
-      return null; // GPS mati: server tetap menerima check-in tanpa jarak.
+      return null;
     }
   }
 
+  void _lanjutkan() => WidgetsBinding.instance.addPostFrameCallback((_) => _run(() async {
+        final v = await context.read<AppState>().lanjutkanKunjungan(o);
+        setState(() {
+          _visit = v;
+          _step = 1;
+        });
+      }));
+
+  /// Urutan: GPS dulu (tolak cepat bila palsu/mati), lalu foto toko, lalu kirim ke server.
   Future<void> _checkin() => _run(() async {
         final app = context.read<AppState>();
         final pos = await _posisi();
-        final v = await app.checkin(o, lat: pos?.latitude, lng: pos?.longitude);
+        if (pos == null && o.lat != null) {
+          throw ApiException('Lokasi HP tidak terbaca. Aktifkan GPS dan izinkan akses lokasi untuk Oasis Sales.');
+        }
+        if (pos?.isMocked == true) {
+          throw ApiException('Lokasi palsu terdeteksi. Matikan aplikasi Fake GPS / mock location, lalu coba lagi.');
+        }
+        final foto = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1280, imageQuality: 70);
+        if (foto == null) throw ApiException('Foto toko wajib diambil untuk check-in.');
+        final v = await app.checkin(o,
+            lat: pos?.latitude, lng: pos?.longitude, akurasi: pos?.accuracy, mock: pos?.isMocked ?? false, foto: await foto.readAsBytes());
         setState(() {
           _visit = v;
           _step = 1;
@@ -154,9 +175,9 @@ class _KunjunganScreenState extends State<KunjunganScreen> {
   }
 
   List<Widget> _stepCheckin() => [
-        FilledButton.icon(onPressed: _checkin, icon: const Icon(Icons.my_location), label: const Padding(padding: EdgeInsets.all(12), child: Text('Check-in di lokasi'))),
+        FilledButton.icon(onPressed: _checkin, icon: const Icon(Icons.photo_camera), label: const Padding(padding: EdgeInsets.all(12), child: Text('Foto toko & check-in'))),
         const SizedBox(height: 6),
-        const Text('Check-in memakai GPS dan harus dalam radius 150 m dari outlet.', textAlign: TextAlign.center),
+        const Text('Check-in memakai GPS (maks. 150 m dari outlet) dan foto tampak depan toko. Lokasi palsu akan ditolak.', textAlign: TextAlign.center),
       ];
 
   List<Widget> _stepStok(AppState s) => [

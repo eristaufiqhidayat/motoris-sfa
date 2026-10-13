@@ -32,10 +32,20 @@ class ApiClient {
   Future<dynamic> post(String path, [Map<String, dynamic>? body]) =>
       _send(() => _http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body ?? {})));
 
-  Future<dynamic> _send(Future<http.Response> Function() call) async {
+  /// POST multipart (form + satu file), dipakai untuk check-in berfoto.
+  Future<dynamic> postFile(String path, Map<String, String> fields, {required String field, required List<int> bytes, required String filename}) =>
+      _send(() async {
+        final req = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'))
+          ..headers.addAll({'Accept': 'application/json', if (token != null) 'Authorization': 'Bearer $token'})
+          ..fields.addAll(fields)
+          ..files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename));
+        return http.Response.fromStream(await _http.send(req));
+      }, timeout: const Duration(seconds: 60));
+
+  Future<dynamic> _send(Future<http.Response> Function() call, {Duration timeout = const Duration(seconds: 20)}) async {
     final http.Response res;
     try {
-      res = await call().timeout(const Duration(seconds: 20));
+      res = await call().timeout(timeout);
     } catch (_) {
       throw ApiException('Tidak bisa terhubung ke server. Periksa sinyal lalu coba lagi.');
     }

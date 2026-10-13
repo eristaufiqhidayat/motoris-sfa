@@ -52,6 +52,7 @@ input[type=number]{width:90px;text-align:right}
     <div class="brand"><div class="logo"><img src="{{ asset('img/oasis-logo.png') }}" alt="Oasis"></div><div><b>ERP Depo</b><small>{{ auth()->user()->depot?->nama }}</small></div></div>
     @php($pending = \App\Models\SalesOrder::where('status','menunggu_approval')->count())
     @php($setor = \App\Models\Loading::where('status','setor')->count())
+    @php($janggal = \App\Models\Visit::whereNotNull('flags')->whereNull('diperiksa_at')->count())
     @php($transit = \App\Models\GoodsReceipt::where('status','transit')->count())
     <nav>
       <div class="grp">Inventory / Warehouse</div>
@@ -61,6 +62,7 @@ input[type=number]{width:90px;text-align:right}
       <a href="{{ route('opname') }}" class="{{ request()->routeIs('opname*') ? 'on' : '' }}">Stock opname</a>
       <div class="grp">Sales & Distribusi</div>
       <a href="{{ route('muat') }}" class="{{ request()->routeIs('muat*') ? 'on' : '' }}">Muat & setoran @if($setor)<span class="k">{{ $setor }}</span>@endif</a>
+      <a href="{{ route('kunjungan') }}" class="{{ request()->routeIs('kunjungan*') ? 'on' : '' }}">Kunjungan & check-in @if($janggal)<span class="k">{{ $janggal }}</span>@endif</a>
       <a href="{{ route('order') }}" class="{{ request()->routeIs('order*') ? 'on' : '' }}">Sales order @if($pending)<span class="k">{{ $pending }}</span>@endif</a>
     </nav>
   </aside>

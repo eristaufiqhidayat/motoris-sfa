@@ -7,6 +7,9 @@ use App\Models\Outlet;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class SalesFlowTest extends TestCase
@@ -19,6 +22,24 @@ class SalesFlowTest extends TestCase
     {
         return $this->postJson('/api/login', ['email' => $email, 'password' => 'password'])
             ->assertOk()->json('token');
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+    }
+
+    /** Check-in tepat di titik outlet dengan foto, kecuali $extra menimpa. */
+    private function checkin(string $token, Outlet $outlet, array $extra = []): TestResponse
+    {
+        return $this->withToken($token)->post('/api/visits', array_merge([
+            'outlet_id' => $outlet->id,
+            'lat' => $outlet->lat,
+            'lng' => $outlet->lng,
+            'akurasi' => 12,
+            'foto' => UploadedFile::fake()->image('toko.jpg', 640, 480),
+        ], $extra), ['Accept' => 'application/json']);
     }
 
     public function test_admin_tidak_bisa_login_ke_aplikasi_sales(): void
@@ -44,8 +65,7 @@ class SalesFlowTest extends TestCase
         $galon = Product::galon();
         $motor = Location::where('kode', 'B4521KZE')->first();
 
-        $visit = $this->withToken($t)->postJson('/api/visits', ['outlet_id' => $outlet->id, 'lat' => $outlet->lat, 'lng' => $outlet->lng])
-            ->assertCreated()->json('id');
+        $visit = $this->checkin($t, $outlet)->assertCreated()->json('id');
 
         $so = $this->withToken($t)->postJson('/api/orders/canvas', [
             'visit_id' => $visit,
@@ -70,7 +90,7 @@ class SalesFlowTest extends TestCase
     {
         $t = $this->token();
         $outlet = Outlet::where('nama', 'Warung Bu Siti')->first();
-        $visit = $this->withToken($t)->postJson('/api/visits', ['outlet_id' => $outlet->id])->json('id');
+        $visit = $this->checkin($t, $outlet)->json('id');
 
         $this->withToken($t)->postJson('/api/orders/canvas', [
             'visit_id' => $visit,
@@ -83,15 +103,54 @@ class SalesFlowTest extends TestCase
     public function test_checkin_ditolak_bila_jauh_dari_outlet(): void
     {
         $outlet = Outlet::where('nama', 'Toko Berkah Jaya')->first();
-        $this->withToken($this->token())->postJson('/api/visits', ['outlet_id' => $outlet->id, 'lat' => $outlet->lat + 0.01, 'lng' => $outlet->lng])
+        $this->checkin($this->token(), $outlet, ['lat' => $outlet->lat + 0.01])
             ->assertStatus(422)->assertJsonValidationErrors('lokasi');
+    }
+
+    public function test_checkin_ditolak_bila_lokasi_palsu(): void
+    {
+        $outlet = Outlet::where('nama', 'Toko Berkah Jaya')->first();
+        $this->checkin($this->token(), $outlet, ['mock' => 1])
+            ->assertStatus(422)->assertJsonValidationErrors('lokasi');
+    }
+
+    public function test_checkin_wajib_foto_dan_gps(): void
+    {
+        $t = $this->token();
+        $outlet = Outlet::where('nama', 'Toko Berkah Jaya')->first();
+        $this->checkin($t, $outlet, ['foto' => null])->assertStatus(422)->assertJsonValidationErrors('foto');
+        $this->checkin($t, $outlet, ['lat' => null, 'lng' => null])->assertStatus(422)->assertJsonValidationErrors('lokasi');
+
+        $id = $this->checkin($t, $outlet)->assertCreated()->assertJsonPath('flags', [])->json('id');
+        Storage::disk('local')->assertExists(\App\Models\Visit::find($id)->foto_path);
+    }
+
+    public function test_checkin_janggal_ditandai_lalu_diperiksa_admin(): void
+    {
+        $t = $this->token();
+        $a = Outlet::where('nama', 'Toko Berkah Jaya')->first();
+        $b = Outlet::where('nama', 'Warung Bu Siti')->first();
+
+        $va = $this->checkin($t, $a)->assertCreated()->json('id');
+        $this->withToken($t)->postJson("/api/visits/{$va}/tutup", ['status' => 'tutup'])->assertOk();
+
+        // Warung Bu Siti ±4 km dari Berkah Jaya, check-in sedetik kemudian dengan GPS kurang akurat.
+        $vb = $this->checkin($t, $b, ['akurasi' => 250])->assertCreated();
+        $this->assertEqualsCanonicalizing(['akurasi_buruk', 'terlalu_cepat'], $vb->json('flags'));
+
+        $admin = User::where('email', 'admin@oasis.test')->first();
+        $this->actingAs($admin)->get(route('kunjungan', ['janggal' => 1]))->assertOk()->assertSee('Pindah outlet terlalu cepat');
+        $visit = \App\Models\Visit::find($vb->json('id'));
+        $this->actingAs($admin)->get(route('kunjungan.foto', $visit))->assertOk();
+        $this->actingAs($admin)->post(route('kunjungan.periksa', $visit))->assertRedirect();
+        $this->assertNotNull($visit->fresh()->diperiksa_at);
     }
 
     public function test_taking_order_lewat_limit_menunggu_approval_lalu_disetujui_admin(): void
     {
         $t = $this->token();
         $outlet = Outlet::where('nama', 'Toko Grosir Abadi')->first(); // piutang 5,4 jt dari limit 6 jt
-        $visit = $this->withToken($t)->postJson('/api/visits', ['outlet_id' => $outlet->id])->json('id');
+        $visit = $this->checkin($t, $outlet)->json('id');
 
         $sisa = $this->withToken($t)->postJson("/api/visits/{$visit}/stok-outlet", ['stok' => [Product::galon()->id => 12]])->assertOk();
         $this->assertSame(28, collect($sisa->json('saran_order'))->firstWhere('nama', 'Galon 19 L')['qty']);
@@ -118,7 +177,7 @@ class SalesFlowTest extends TestCase
         $this->withToken($t)->postJson('/api/setoran')->assertOk()->assertJsonPath('status', 'setor');
         // Setelah setor, jual langsung ditolak.
         $outlet = Outlet::where('nama', 'Kios Pak Darto')->first();
-        $visit = $this->withToken($t)->postJson('/api/visits', ['outlet_id' => $outlet->id])->json('id');
+        $visit = $this->checkin($t, $outlet)->json('id');
         $this->withToken($t)->postJson('/api/orders/canvas', ['visit_id' => $visit, 'items' => [['product_id' => $galon->id, 'qty' => 1]], 'galon_kosong' => 0, 'metode_bayar' => 'tunai'])
             ->assertStatus(422);
 

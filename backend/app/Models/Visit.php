@@ -16,6 +16,8 @@ class Visit extends Model
             'tanggal' => 'date',
             'checkin_at' => 'datetime',
             'stok_outlet' => 'array',
+            'flags' => 'array',
+            'diperiksa_at' => 'datetime',
         ];
     }
 

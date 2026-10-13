@@ -6,24 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Outlet;
 use App\Models\Product;
 use App\Models\Visit;
+use App\Services\CheckinGuard;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class VisitController extends Controller
 {
-    /** Radius maksimal check-in dari titik outlet. */
-    private const RADIUS_METER = 150;
-
-    public function checkin(Request $request)
+    public function checkin(Request $request, CheckinGuard $guard)
     {
-        $data = $request->validate([
-            'outlet_id' => ['required', 'exists:outlets,id'],
-            'lat' => ['nullable', 'numeric'],
-            'lng' => ['nullable', 'numeric'],
-        ]);
+        $request->validate(['outlet_id' => ['required', 'exists:outlets,id']]);
         $user = $request->user();
-        $outlet = Outlet::findOrFail($data['outlet_id']);
+        $outlet = Outlet::findOrFail($request->integer('outlet_id'));
 
+        // Kunjungan yang masih terbuka dilanjutkan tanpa check-in ulang.
         $open = Visit::where('user_id', $user->id)->whereDate('tanggal', today())->where('status', 'checkin')->first();
         if ($open && $open->outlet_id !== $outlet->id) {
             throw ValidationException::withMessages(['outlet_id' => "Selesaikan dulu kunjungan di {$open->outlet->nama}."]);
@@ -32,12 +27,20 @@ class VisitController extends Controller
             return $this->payload($open);
         }
 
-        $jarak = null;
-        if (isset($data['lat'], $data['lng']) && $outlet->lat && $outlet->lng) {
-            $jarak = (int) round($this->haversine($data['lat'], $data['lng'], $outlet->lat, $outlet->lng));
-            if ($jarak > self::RADIUS_METER) {
-                throw ValidationException::withMessages(['lokasi' => "Posisi Anda {$jarak} m dari outlet. Check-in maksimal ".self::RADIUS_METER.' m.']);
-            }
+        $data = $request->validate([
+            'lat' => ['nullable', 'numeric'],
+            'lng' => ['nullable', 'numeric'],
+            'akurasi' => ['nullable', 'numeric', 'min:0'],
+            'mock' => ['nullable', 'boolean'],
+            'foto' => ['required', 'image', 'max:6144'],
+        ], ['foto.required' => 'Foto toko wajib diambil saat check-in.']);
+
+        $lat = isset($data['lat']) ? (float) $data['lat'] : null;
+        $lng = isset($data['lng']) ? (float) $data['lng'] : null;
+        $akurasi = isset($data['akurasi']) ? (float) $data['akurasi'] : null;
+        $hasil = $guard->periksa($user->id, $outlet, $lat, $lng, $akurasi, (bool) ($data['mock'] ?? false));
+        if ($hasil['tolak']) {
+            throw ValidationException::withMessages(['lokasi' => $hasil['tolak']]);
         }
 
         $visit = Visit::create([
@@ -45,9 +48,12 @@ class VisitController extends Controller
             'outlet_id' => $outlet->id,
             'tanggal' => today(),
             'checkin_at' => now(),
-            'lat' => $data['lat'] ?? null,
-            'lng' => $data['lng'] ?? null,
-            'jarak_meter' => $jarak,
+            'lat' => $lat,
+            'lng' => $lng,
+            'jarak_meter' => $hasil['jarak'],
+            'gps_akurasi' => $akurasi,
+            'foto_path' => $request->file('foto')->store('checkin/'.today()->format('Y-m-d'), 'local'),
+            'flags' => $hasil['flags'] ?: null,
             'status' => 'checkin',
         ]);
 
@@ -102,18 +108,9 @@ class VisitController extends Controller
             'status' => $visit->status,
             'checkin_at' => $visit->checkin_at->toIso8601String(),
             'jarak_meter' => $visit->jarak_meter,
+            'flags' => $visit->flags ?? [],
             'stok_outlet' => $sisa,
             'saran_order' => $saran,
         ];
-    }
-
-    private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
-    {
-        $r = 6371000;
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLng = deg2rad($lng2 - $lng1);
-        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
-
-        return $r * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 }

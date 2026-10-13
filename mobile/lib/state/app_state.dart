@@ -79,8 +79,18 @@ class AppState extends ChangeNotifier {
 
   // ---- kunjungan & order ----
 
-  Future<VisitDetail> checkin(Outlet outlet, {double? lat, double? lng}) async =>
-      VisitDetail.fromJson(await api.post('/visits', {'outlet_id': outlet.id, 'lat': lat, 'lng': lng}));
+  /// Check-in baru: posisi GPS + foto toko. Server menolak lokasi palsu / di luar radius.
+  Future<VisitDetail> checkin(Outlet outlet, {double? lat, double? lng, double? akurasi, bool mock = false, required List<int> foto}) async =>
+      VisitDetail.fromJson(await api.postFile('/visits', {
+        'outlet_id': '${outlet.id}',
+        if (lat != null) 'lat': '$lat',
+        if (lng != null) 'lng': '$lng',
+        if (akurasi != null) 'akurasi': '$akurasi',
+        'mock': mock ? '1' : '0',
+      }, field: 'foto', bytes: foto, filename: 'toko-${outlet.id}.jpg'));
+
+  /// Melanjutkan kunjungan yang sudah check-in tapi belum ditutup.
+  Future<VisitDetail> lanjutkanKunjungan(Outlet outlet) async => VisitDetail.fromJson(await api.post('/visits', {'outlet_id': outlet.id}));
 
   Future<VisitDetail> simpanStokOutlet(int visitId, Map<int, int> stok) async => VisitDetail.fromJson(
       await api.post('/visits/$visitId/stok-outlet', {'stok': stok.map((k, v) => MapEntry('$k', v))}));
